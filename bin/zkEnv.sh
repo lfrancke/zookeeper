@@ -32,11 +32,11 @@ ZOOKEEPER_PREFIX="${ZOOBINDIR}/.."
 if [ $# -gt 1 ]
 then
     if [ "--config" = "$1" ]
-	  then
-	      shift
-	      confdir=$1
-	      shift
-	      ZOOCFGDIR=$confdir
+    then
+        shift
+        confdir=$1
+        shift
+        ZOOCFGDIR=$confdir
     fi
 fi
 

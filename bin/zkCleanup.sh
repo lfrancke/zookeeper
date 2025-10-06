@@ -28,26 +28,47 @@
 # use POSIX interface, symlink is followed automatically
 ZOOBIN="${BASH_SOURCE-$0}"
 ZOOBIN="$(dirname "${ZOOBIN}")"
-ZOOBINDIR="$(cd "${ZOOBIN}"; pwd)"
+ZOOBINDIR="$(cd "${ZOOBIN}" || exit; pwd)"
 
 if [ -e "$ZOOBIN/../libexec/zkEnv.sh" ]; then
-  . "$ZOOBINDIR"/../libexec/zkEnv.sh
+  . "$ZOOBINDIR"/../libexec/zkEnv.sh "$@"
 else
-  . "$ZOOBINDIR"/zkEnv.sh
+  . "$ZOOBINDIR"/zkEnv.sh "$@"
 fi
 
-ZOODATADIR="$(grep "^[[:space:]]*dataDir=" "$ZOOCFG" | sed -e 's/.*=//')"
-ZOODATALOGDIR="$(grep "^[[:space:]]*dataLogDir=" "$ZOOCFG" | sed -e 's/.*=//')"
+ZOODATADIR=""
+ZOODATALOGDIR=""
+
+# Only try to read config if ZOOCFG exists
+if [ -f "$ZOOCFG" ]; then
+  ZOODATADIR="$(grep "^[[:space:]]*dataDir=" "$ZOOCFG" 2>/dev/null | sed -e 's/.*=//')"
+  ZOODATALOGDIR="$(grep "^[[:space:]]*dataLogDir=" "$ZOOCFG" 2>/dev/null | sed -e 's/.*=//')"
+fi
 
 ZOO_LOG_FILE=zookeeper-$USER-cleanup-$HOSTNAME.log
 
-if [ "x$ZOODATALOGDIR" = "x" ]
-then
-"$JAVA" "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" "-Dzookeeper.log.file=${ZOO_LOG_FILE}" \
-     -cp "$CLASSPATH" $JVMFLAGS \
-     org.apache.zookeeper.server.PurgeTxnLog "$ZOODATADIR" $*
+# If config provides both directories, use them; otherwise pass all args to PurgeTxnLog
+if [ -n "$ZOODATADIR" ]; then
+  if [ -z "$ZOODATALOGDIR" ]; then
+    # Only dataDir specified
+    # Shellcheck is disabled because we actually _want_ JVMFLAGS to be expanded
+    # shellcheck disable=SC2086
+    "$JAVA" "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" "-Dzookeeper.log.file=${ZOO_LOG_FILE}" \
+         -cp "$CLASSPATH" $JVMFLAGS \
+         org.apache.zookeeper.server.PurgeTxnLog "$ZOODATADIR" "$@"
+  else
+    # Both dataDir and dataLogDir specified
+    # Shellcheck is disabled because we actually _want_ JVMFLAGS to be expanded
+    # shellcheck disable=SC2086
+    "$JAVA" "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" "-Dzookeeper.log.file=${ZOO_LOG_FILE}" \
+         -cp "$CLASSPATH" $JVMFLAGS \
+         org.apache.zookeeper.server.PurgeTxnLog "$ZOODATALOGDIR" "$ZOODATADIR" "$@"
+  fi
 else
-"$JAVA" "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" "-Dzookeeper.log.file=${ZOO_LOG_FILE}" \
-     -cp "$CLASSPATH" $JVMFLAGS \
-     org.apache.zookeeper.server.PurgeTxnLog "$ZOODATALOGDIR" "$ZOODATADIR" $*
+  # No config or config doesn't specify directories - pass all args to PurgeTxnLog
+  # Shellcheck is disabled because we actually _want_ JVMFLAGS to be expanded
+  # shellcheck disable=SC2086
+  "$JAVA" "-Dzookeeper.log.dir=${ZOO_LOG_DIR}" "-Dzookeeper.log.file=${ZOO_LOG_FILE}" \
+       -cp "$CLASSPATH" $JVMFLAGS \
+       org.apache.zookeeper.server.PurgeTxnLog "$@"
 fi
